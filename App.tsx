@@ -58,10 +58,63 @@ const UploadSection: React.FC<{ onAnalyze: (file: File) => void; remainingUsage:
         alert("图片大小不能超过 5MB");
         return;
       }
-      setFile(selected);
-      const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result as string);
-      reader.readAsDataURL(selected);
+      
+      // 如果图片超过 1MB，自动压缩成 200KB 左右
+      if (selected.size > 1 * 1024 * 1024) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        img.onload = () => {
+          // 计算压缩后的尺寸（保持宽高比）
+          const maxWidth = 800;
+          const maxHeight = 1200;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+          
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height;
+            height = maxHeight;
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // 绘制压缩后的图片
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          // 将 canvas 转换为 blob，质量设为 0.7（约 200KB）
+          canvas.toBlob((blob) => {
+            if (blob) {
+              // 创建新的 File 对象
+              const compressedFile = new File([blob], selected.name, {
+                type: selected.type,
+                lastModified: Date.now()
+              });
+              
+              setFile(compressedFile);
+              
+              // 创建预览
+              const reader = new FileReader();
+              reader.onloadend = () => setPreview(reader.result as string);
+              reader.readAsDataURL(compressedFile);
+            }
+          }, selected.type, 0.7);
+        };
+        
+        img.src = URL.createObjectURL(selected);
+      } else {
+        // 图片大小合适，直接处理
+        setFile(selected);
+        const reader = new FileReader();
+        reader.onloadend = () => setPreview(reader.result as string);
+        reader.readAsDataURL(selected);
+      }
     }
   };
 
