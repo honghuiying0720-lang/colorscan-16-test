@@ -169,6 +169,7 @@ const LoadingScreen: React.FC = () => {
             
             <h2 className="text-xl font-bold text-gray-800 mb-2">AI 深度分析中</h2>
             <p className="text-gray-500 animate-pulse text-sm">{message}</p>
+            <p className="text-gray-400 text-xs mt-4">预计需要 30 秒左右，请耐心等待 ⏳</p>
         </div>
     );
 };
