@@ -91,16 +91,19 @@ const PaletteCard: React.FC<{ title: string; items: ColorRecommendation[]; type:
     <h3 className={`text-lg font-bold mb-4 flex items-center gap-2 ${type === 'recommend' ? 'text-gray-800' : 'text-gray-800'}`}>
        {type === 'recommend' ? '✨ 最适合的推荐色' : '⚠️ 应避开的雷区色'}
     </h3>
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {items.map((item, idx) => (
-        <div key={idx} className="flex flex-col items-center gap-2">
+        <div key={idx} className="bg-gray-50 rounded-lg p-4 flex flex-col items-center gap-3 hover:shadow-md transition-shadow">
             <div 
-                className="w-20 h-20 rounded-full shadow-inner border border-gray-100"
+                className="w-20 h-20 rounded-full shadow-inner border-2 border-white"
                 style={{ backgroundColor: item.hex }}
             ></div>
             <div className="text-center">
                 <p className="text-sm font-medium text-gray-700">{item.name}</p>
-                <p className="text-xs text-gray-400 uppercase tracking-wider font-mono">{item.hex}</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wider font-mono mb-2">{item.hex}</p>
+                <p className="text-xs text-gray-500 line-clamp-2">
+                    {type === 'recommend' ? item.description : item.reason}
+                </p>
             </div>
         </div>
       ))}
@@ -165,9 +168,41 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
 
         {/* Five Dimensions Summary Icons */}
         <div className="flex justify-center gap-2 mb-8 flex-wrap">
-             {['明亮', '温暖', '清透', '鲜艳'].map(tag => (
-                 <span key={tag} className="px-3 py-1 bg-yellow-400 text-white text-xs rounded-full font-bold shadow-sm">{tag}</span>
-             ))}
+             {(() => {
+                const tags = [];
+                
+                // 基于明度 (value_score) 决定是否显示明亮/深邃
+                if (result.value_score > 50) {
+                    tags.push('明亮');
+                } else {
+                    tags.push('深邃');
+                }
+                
+                // 基于色调 (temperature) 决定是否显示温暖/冷艳
+                if (result.temperature > 50) {
+                    tags.push('温暖');
+                } else {
+                    tags.push('冷艳');
+                }
+                
+                // 基于清浊 (clarity) 决定是否显示清透/柔雾
+                if (result.clarity > 50) {
+                    tags.push('清透');
+                } else {
+                    tags.push('柔雾');
+                }
+                
+                // 基于彩度 (chroma) 决定是否显示鲜艳/柔和
+                if (result.chroma > 50) {
+                    tags.push('鲜艳');
+                } else {
+                    tags.push('柔和');
+                }
+                
+                return tags.map(tag => (
+                    <span key={tag} className="px-3 py-1 bg-yellow-400 text-white text-xs rounded-full font-bold shadow-sm">{tag}</span>
+                ));
+             })()}
         </div>
 
         {/* Text Analysis Grid */}

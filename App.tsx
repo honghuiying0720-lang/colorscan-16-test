@@ -54,67 +54,45 @@ const UploadSection: React.FC<{ onAnalyze: (file: File) => void; remainingUsage:
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
+      
       if (selected.size > 5 * 1024 * 1024) {
         alert("图片大小不能超过 5MB");
         return;
       }
       
-      // 如果图片超过 1MB，自动压缩成 200KB 左右
-      if (selected.size > 1 * 1024 * 1024) {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
+      // 图片预处理：转换为 JPEG 格式，大小控制在 200-300KB
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        // 使用原始分辨率
+        canvas.width = img.width;
+        canvas.height = img.height;
         
-        img.onload = () => {
-          // 计算压缩后的尺寸（保持宽高比）
-          const maxWidth = 800;
-          const maxHeight = 1200;
-          let width = img.width;
-          let height = img.height;
-          
-          if (width > maxWidth) {
-            height = (height * maxWidth) / width;
-            width = maxWidth;
-          }
-          
-          if (height > maxHeight) {
-            width = (width * maxHeight) / height;
-            height = maxHeight;
-          }
-          
-          canvas.width = width;
-          canvas.height = height;
-          
-          // 绘制压缩后的图片
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          // 将 canvas 转换为 blob，质量设为 0.7（约 200KB）
-          canvas.toBlob((blob) => {
-            if (blob) {
-              // 创建新的 File 对象
-              const compressedFile = new File([blob], selected.name, {
-                type: selected.type,
-                lastModified: Date.now()
-              });
-              
-              setFile(compressedFile);
-              
-              // 创建预览
-              const reader = new FileReader();
-              reader.onloadend = () => setPreview(reader.result as string);
-              reader.readAsDataURL(compressedFile);
-            }
-          }, selected.type, 0.7);
-        };
+        // 绘制图片
+        ctx?.drawImage(img, 0, 0, img.width, img.height);
         
-        img.src = URL.createObjectURL(selected);
-      } else {
-        // 图片大小合适，直接处理
-        setFile(selected);
-        const reader = new FileReader();
-        reader.onloadend = () => setPreview(reader.result as string);
-        reader.readAsDataURL(selected);
-      }
+        // 转换为 JPEG 格式，质量设为 0.6（控制大小在 200-300KB）
+        canvas.toBlob((blob) => {
+          if (blob) {
+            // 创建新的 File 对象，使用 JPEG 格式
+            const jpegFile = new File([blob], selected.name.replace(/\.[^/.]+$/, ".jpg"), {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            
+            setFile(jpegFile);
+            
+            // 创建预览
+            const reader = new FileReader();
+            reader.onloadend = () => setPreview(reader.result as string);
+            reader.readAsDataURL(jpegFile);
+          }
+        }, 'image/jpeg', 0.6);
+      };
+      
+      img.src = URL.createObjectURL(selected);
     }
   };
 
@@ -191,12 +169,14 @@ const UploadSection: React.FC<{ onAnalyze: (file: File) => void; remainingUsage:
   );
 };
 
-const LoadingScreen: React.FC = () => {
+const LoadingScreen: React.FC<{ onTimeout: () => void }> = ({ onTimeout }) => {
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState('正在初始化 AI 模型...');
+    const [isTimeout, setIsTimeout] = useState(false);
     
     useEffect(() => {
-        const timer = setInterval(() => {
+        // 进度更新计时器（30秒完成）
+        const progressTimer = setInterval(() => {
             setProgress(prev => {
                 if (prev >= 95) return prev;
                 if (prev === 20) setMessage('正在识别面部特征...');
@@ -207,8 +187,18 @@ const LoadingScreen: React.FC = () => {
             });
         }, 300); // 30s approximate total
 
-        return () => clearInterval(timer);
-    }, []);
+        // 超时检测计时器（3分钟）
+        const timeoutTimer = setTimeout(() => {
+            setIsTimeout(true);
+            setMessage('分析超时，请重新测试');
+            onTimeout(); // 调用超时回调函数
+        }, 3 * 60 * 1000); // 3分钟
+
+        return () => {
+            clearInterval(progressTimer);
+            clearTimeout(timeoutTimer);
+        };
+    }, [onTimeout]);
 
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-8">
@@ -223,53 +213,33 @@ const LoadingScreen: React.FC = () => {
             <h2 className="text-xl font-bold text-gray-800 mb-2">AI 深度分析中</h2>
             <p className="text-gray-500 animate-pulse text-sm">{message}</p>
             <p className="text-gray-400 text-xs mt-4">预计需要 30 秒左右，请耐心等待 ⏳</p>
+            
+            {isTimeout && (
+                <div className="mt-8 p-4 bg-red-50 rounded-lg border border-red-100 text-center">
+                    <p className="text-red-600 text-sm font-medium">分析已超时（超过3分钟）</p>
+                    <p className="text-red-500 text-xs mt-2">可能是网络问题或服务器繁忙</p>
+                    <button 
+                        onClick={onTimeout}
+                        className="mt-4 px-6 py-2 bg-red-500 text-white rounded-full text-sm font-medium hover:bg-red-600 transition-colors"
+                    >
+                        重新测试
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
 
 // --- Main App Component ---
 
-// 检查并更新使用次数
+// 暂时屏蔽次数限制，返回固定值
 const checkAndUpdateUsage = (): { canUse: boolean; remaining: number } => {
-  const today = new Date().toDateString();
-  const usageData = localStorage.getItem('usageLimit');
-  
-  let usage = {
-    date: today,
-    count: 0
-  };
-  
-  if (usageData) {
-    const parsed = JSON.parse(usageData);
-    if (parsed.date === today) {
-      usage = parsed;
-    }
-  }
-  
-  const canUse = usage.count < 8;
-  
-  return { canUse, remaining: 8 - usage.count };
+  return { canUse: true, remaining: 8 }; // 始终返回可以使用，剩余次数显示为8
 };
 
-// 增加使用次数
+// 暂时屏蔽增加使用次数的功能
 const incrementUsage = () => {
-  const today = new Date().toDateString();
-  const usageData = localStorage.getItem('usageLimit');
-  
-  let usage = {
-    date: today,
-    count: 0
-  };
-  
-  if (usageData) {
-    const parsed = JSON.parse(usageData);
-    if (parsed.date === today) {
-      usage = parsed;
-    }
-  }
-  
-  usage.count += 1;
-  localStorage.setItem('usageLimit', JSON.stringify(usage));
+  // 空实现，暂时不增加使用次数
 };
 
 const App: React.FC = () => {
@@ -352,6 +322,13 @@ const App: React.FC = () => {
     localStorage.removeItem('userImage');
   };
 
+  // 处理分析超时
+  const handleAnalysisTimeout = () => {
+    setStep('upload');
+    setError('分析超时（超过3分钟），请检查网络连接后重新测试');
+    localStorage.setItem('step', 'upload');
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] font-sans">
       {step === 'landing' && <Landing onStart={handleStart} />}
@@ -367,7 +344,7 @@ const App: React.FC = () => {
             <UploadSection onAnalyze={handleAnalyze} remainingUsage={usageInfo.remaining} />
         </>
       )}
-      {step === 'analyzing' && <LoadingScreen />}
+      {step === 'analyzing' && <LoadingScreen onTimeout={handleAnalysisTimeout} />}
       {step === 'result' && result && (
         <ResultView result={result} userImage={userImage} onReset={handleReset} />
       )}

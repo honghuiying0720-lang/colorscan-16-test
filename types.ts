@@ -14,7 +14,8 @@ export interface BodyPartColor {
 export interface ColorRecommendation {
   name: string;
   hex: string;
-  description: string;
+  description?: string;
+  reason?: string;
 }
 
 export interface AnalysisResult {

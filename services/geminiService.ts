@@ -32,6 +32,7 @@ const SYSTEM_PROMPT = `
 2. **明星参考**：列举2-3位同色型的中韩明星，说明她们的穿搭风格特点
 3. **饰品颜色建议**：金属颜色（金色/银色）、珍珠颜色、宝石选择等
 4. **口红腮红妆容建议**：推荐具体品牌和色号（如MAC、YSL、Dior、NARS、3CE等）
+5.**色号推荐以及规避**： 推荐8个最适合推荐色（recommended_colors），以及4个规避色（avoid_colors）
 
 **重要**：必须严格按照以下 JSON 格式返回，所有字段都必须填写：
 
@@ -76,6 +77,11 @@ const SYSTEM_PROMPT = `
   "makeup_tips": "口红建议选择珊瑚橙、蜜桃粉等温暖明亮的色系，避免深紫色或冷粉色。眼影可以选择大地色系、金棕色，打造自然温暖的妆容。腮红选择杏色或浅橙色，提升气色。",
   "styling_tips": "服装配色以暖色调为主，避免过于深沉的颜色。春夏季节可以选择明亮清爽的颜色，秋冬季节选择温暖柔和的色调。配饰可以选择金色系，更能衬托肤色。整体风格以轻松自然为主，避免过于正式严肃的搭配。"
 }
+
+注意：
+1) 所有 hex 必须是 #RRGGBB。
+2) recommended_colors 必须正好 8 个，avoid_colors 必须正好 4 个。
+3) 不要输出任何额外字段；缺信息也要给出合理推断，确保字段齐全。
 `;
 
 export const analyzeImage = async (base64Image: string): Promise<AnalysisResult> => {
