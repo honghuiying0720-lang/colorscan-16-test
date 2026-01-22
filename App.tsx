@@ -2,49 +2,136 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Step, AnalysisResult } from './types';
 import { analyzeImage } from './services/geminiService';
 import ResultView from './components/ResultView';
+import * as demoDataModule from './demo-data.json';
+const demoData = demoDataModule.default || [];
 
 // --- Sub-components for Landing, Upload, Loading ---
 
-const Landing: React.FC<{ onStart: () => void }> = ({ onStart }) => (
-  <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-    <div className="absolute top-0 left-0 w-full h-full -z-10 bg-[#FDFBF7]">
-         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-pink-200 rounded-full blur-[100px] opacity-30"></div>
-         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-yellow-200 rounded-full blur-[100px] opacity-30"></div>
-    </div>
-    
-    <div className="mb-8 relative">
-        <div className="w-24 h-24 bg-gradient-to-tr from-pink-400 to-yellow-400 rounded-2xl mx-auto rotate-3 shadow-xl flex items-center justify-center text-4xl">
-            ✨
+const Landing: React.FC<{ onStart: () => void; onDemoSelect: (demo: AnalysisResult) => void }> = ({ onStart, onDemoSelect }) => {
+  const [selectedSeason, setSelectedSeason] = useState<string>('spring');
+  
+  // 从对象结构中提取所有色彩数据并过滤出对应季节的
+  const getAllDemos = () => {
+    if (typeof demoData === 'object' && demoData !== null) {
+      return Object.values(demoData);
+    }
+    return [];
+  };
+  
+  const seasonDemos = getAllDemos().filter(demo => demo.season === selectedSeason);
+  
+  const seasons = ['spring', 'summer', 'autumn', 'winter'];
+  const seasonNames = {
+    spring: '春季型',
+    summer: '夏季型',
+    autumn: '秋季型',
+    winter: '冬季型'
+  };
+  
+  const subtypeNames = {
+    clear_spring: '净春型',
+    light_spring: '浅春型',
+    soft_spring: '柔春型',
+    bright_spring: '亮春型',
+    light_summer: '浅夏型',
+    soft_summer: '柔夏型',
+    bright_summer: '亮夏型',
+    deep_summer: '深夏型',
+    soft_autumn: '柔秋型',
+    bright_autumn: '亮秋型',
+    deep_autumn: '深秋型',
+    light_autumn: '浅秋型',
+    soft_winter: '柔冬型',
+    bright_winter: '亮冬型',
+    deep_winter: '深冬型',
+    clear_winter: '净冬型'
+  };
+  
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full -z-10 bg-[#FDFBF7]">
+           <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-pink-200 rounded-full blur-[100px] opacity-30"></div>
+           <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-yellow-200 rounded-full blur-[100px] opacity-30"></div>
+      </div>
+      
+      <div className="mb-8 relative">
+          <div className="w-24 h-24 bg-gradient-to-tr from-pink-400 to-yellow-400 rounded-2xl mx-auto rotate-3 shadow-xl flex items-center justify-center text-4xl">
+              ✨
+          </div>
+      </div>
+      
+      <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4 tracking-tight">
+        ColorScan <span className="text-amber-500">16</span>
+      </h1>
+      <h2 className="text-xl md:text-2xl font-light text-gray-600 mb-8">
+        找到属于你的专属天命色彩
+      </h2>
+      <p className="max-w-md text-gray-500 mb-12 leading-relaxed">
+        不论你是买衣服总是踩雷，还是妆容显脏？<br/>
+        AI 智能分析 16 型四季色彩，为您量身定制<br/>
+        <span className="font-semibold text-gray-700">穿搭方案</span> 与 <span className="font-semibold text-gray-700">妆容建议</span>。
+      </p>
+
+      <div className="grid grid-cols-4 gap-2 mb-12 max-w-sm w-full opacity-80">
+          <div className="h-12 bg-green-200 rounded-lg"></div>
+          <div className="h-12 bg-blue-200 rounded-lg"></div>
+          <div className="h-12 bg-orange-200 rounded-lg"></div>
+          <div className="h-12 bg-purple-200 rounded-lg"></div>
+      </div>
+
+      <button 
+        onClick={onStart}
+        className="bg-gray-900 text-white text-lg font-bold py-4 px-16 rounded-full shadow-xl hover:bg-gray-800 transform transition hover:scale-105 active:scale-95 mb-16"
+      >
+        开始测试
+      </button>
+      
+      {/* Demo Section */}
+      <div className="w-full max-w-4xl mt-8">
+        <h3 className="text-xl font-bold text-gray-800 mb-6">🎨 色彩类型演示</h3>
+        
+        {/* Season Selector */}
+        <div className="flex justify-center gap-4 mb-8">
+          {seasons.map(season => (
+            <button
+              key={season}
+              onClick={() => setSelectedSeason(season)}
+              className={`px-6 py-2 rounded-full font-medium transition-all ${selectedSeason === season 
+                ? 'bg-gray-900 text-white shadow-lg' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              {seasonNames[season as keyof typeof seasonNames]}
+            </button>
+          ))}
         </div>
+        
+        {/* Demo Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {seasonDemos.map((demo, index) => {
+            return (
+              <div 
+                key={index}
+                onClick={() => onDemoSelect(demo)}
+                className="bg-white rounded-xl shadow-md p-4 border border-gray-100 hover:shadow-lg cursor-pointer transition-all transform hover:scale-105"
+              >
+                <div className="h-12 rounded-lg mb-4" style={{ 
+                  background: `linear-gradient(45deg, ${demo.recommended_colors[0].hex}, ${demo.recommended_colors[1].hex})` 
+                }}></div>
+                <h4 className="font-bold text-gray-800 mb-1">{subtypeNames[demo.subtype as keyof typeof subtypeNames]}</h4>
+                <p className="text-sm text-gray-500 mb-3">
+                  色调: {demo.temperature} | 明度: {demo.value_score}
+                </p>
+                <button className="text-sm text-blue-600 font-medium hover:text-blue-800">
+                  查看详情
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
-    
-    <h1 className="text-4xl md:text-5xl font-bold text-gray-800 mb-4 tracking-tight">
-      ColorScan <span className="text-amber-500">16</span>
-    </h1>
-    <h2 className="text-xl md:text-2xl font-light text-gray-600 mb-8">
-      找到属于你的专属天命色彩
-    </h2>
-    <p className="max-w-md text-gray-500 mb-12 leading-relaxed">
-      不论你是买衣服总是踩雷，还是妆容显脏？<br/>
-      AI 智能分析 16 型四季色彩，为您量身定制<br/>
-      <span className="font-semibold text-gray-700">穿搭方案</span> 与 <span className="font-semibold text-gray-700">妆容建议</span>。
-    </p>
-
-    <div className="grid grid-cols-4 gap-2 mb-12 max-w-sm w-full opacity-80">
-        <div className="h-12 bg-green-200 rounded-lg"></div>
-        <div className="h-12 bg-blue-200 rounded-lg"></div>
-        <div className="h-12 bg-orange-200 rounded-lg"></div>
-        <div className="h-12 bg-purple-200 rounded-lg"></div>
-    </div>
-
-    <button 
-      onClick={onStart}
-      className="bg-gray-900 text-white text-lg font-bold py-4 px-16 rounded-full shadow-xl hover:bg-gray-800 transform transition hover:scale-105 active:scale-95"
-    >
-      开始测试
-    </button>
-  </div>
-);
+  );
+};
 
 const UploadSection: React.FC<{ onAnalyze: (file: File) => void; remainingUsage: number }> = ({ onAnalyze, remainingUsage }) => {
   const [file, setFile] = useState<File | null>(null);
@@ -296,6 +383,13 @@ const App: React.FC = () => {
     localStorage.setItem('step', 'upload');
   };
 
+  const handleDemoSelect = (demo: AnalysisResult) => {
+    setResult(demo);
+    localStorage.setItem('result', JSON.stringify(demo));
+    setStep('result');
+    localStorage.setItem('step', 'result');
+  };
+
   const handleAnalyze = async (file: File) => {
     // 检查使用次数
     const usage = checkAndUpdateUsage();
@@ -368,7 +462,7 @@ const App: React.FC = () => {
         <AppLoading />
       ) : (
         <>
-          {step === 'landing' && <Landing onStart={handleStart} />}
+          {step === 'landing' && <Landing onStart={handleStart} onDemoSelect={handleDemoSelect} />}
           {step === 'upload' && (
             <>
                 {error && (

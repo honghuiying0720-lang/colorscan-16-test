@@ -129,9 +129,13 @@ export const analyzeImage = async (base64Image: string): Promise<AnalysisResult>
     }
 
     const data = await response.json();
+    console.log("=== AI原始响应数据 ===");
+    console.log(data);
 
     // 兼容不同返回结构，提取文本内容
     let content = data.choices?.[0]?.message?.content || "";
+    console.log("=== 提取的AI内容 ===");
+    console.log(content);
 
     if (!content) {
       throw new Error("Empty content from AI response");
@@ -151,8 +155,12 @@ export const analyzeImage = async (base64Image: string): Promise<AnalysisResult>
       cleaned = cleaned.replace(/^```\s*/i, "");
       cleaned = cleaned.replace(/\s*```$/, "");
     }
+    console.log("=== 清理后的JSON内容 ===");
+    console.log(cleaned);
 
     const result = JSON.parse(cleaned) as AnalysisResult;
+    console.log("=== 解析后的分析结果 ===");
+    console.log(result);
     return result;
   } catch (error) {
     console.error("Analysis Error (via 百度千帆 API):", error);
