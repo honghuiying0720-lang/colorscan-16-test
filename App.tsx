@@ -109,7 +109,7 @@ const UploadSection: React.FC<{ onAnalyze: (file: File) => void; remainingUsage:
         
         {/* 显示剩余使用次数 */}
         <div className="bg-amber-50 rounded-xl p-4 mb-6 border border-amber-100 text-center">
-          <p className="text-sm font-medium text-amber-800">今日剩余使用次数: <span className="font-bold text-lg">{remainingUsage}/8</span></p>
+          <p className="text-sm font-medium text-amber-800">今日剩余使用次数: <span className="font-bold text-lg">{remainingUsage}/10</span></p>
         </div>
         
         <div className="bg-white rounded-3xl p-6 shadow-lg border border-gray-100">
@@ -243,14 +243,25 @@ const AppLoading: React.FC = () => (
 
 // --- Main App Component ---
 
-// 暂时屏蔽次数限制，返回固定值
+// 检查并更新使用次数，限制为10次
 const checkAndUpdateUsage = (): { canUse: boolean; remaining: number } => {
-  return { canUse: true, remaining: 8 }; // 始终返回可以使用，剩余次数显示为8
+  const today = new Date().toDateString();
+  const usageKey = `usage_${today}`;
+  const currentUsage = parseInt(localStorage.getItem(usageKey) || '0');
+  const maxUsage = 10;
+  
+  return {
+    canUse: currentUsage < maxUsage,
+    remaining: maxUsage - currentUsage
+  };
 };
 
-// 暂时屏蔽增加使用次数的功能
+// 增加使用次数
 const incrementUsage = () => {
-  // 空实现，暂时不增加使用次数
+  const today = new Date().toDateString();
+  const usageKey = `usage_${today}`;
+  const currentUsage = parseInt(localStorage.getItem(usageKey) || '0');
+  localStorage.setItem(usageKey, (currentUsage + 1).toString());
 };
 
 const App: React.FC = () => {
@@ -289,7 +300,7 @@ const App: React.FC = () => {
     // 检查使用次数
     const usage = checkAndUpdateUsage();
     if (!usage.canUse) {
-      setError('今日使用次数已达上限（8次），请明天再试。');
+      setError('今日使用次数已达上限（10次），请明天再试。');
       return;
     }
     
