@@ -217,7 +217,13 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
         
         <div className="relative inline-block mb-6">
             <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-white shadow-lg mx-auto">
-                <img src={userImage} alt="User" className="w-full h-full object-cover" />
+                {userImage ? (
+                    <img src={userImage} alt="User" className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                        <span className="text-gray-400 text-4xl">👤</span>
+                    </div>
+                )}
             </div>
             <div className="absolute -bottom-3 left-1/2 transform -translate-x-1/2">
                 <SeasonBadge season={result.season} />
