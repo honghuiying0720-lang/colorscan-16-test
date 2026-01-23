@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AnalysisResult, ColorRecommendation, BodyPartColor } from '../types';
 import RadarChartComponent from './RadarChartComponent';
-import html2canvas from 'html2canvas';
 
 interface Props {
   result: AnalysisResult;
@@ -133,7 +132,7 @@ const ProgressBar: React.FC<{ label: string; value: number; leftLabel: string; r
 
 const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
   
-  // Refs for screenshot functionality
+  // Refs for components
   const headerRef = useRef<HTMLDivElement>(null);
   const bodyPartsRef = useRef<HTMLDivElement>(null);
   const dimensionsRef = useRef<HTMLDivElement>(null);
@@ -152,80 +151,11 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
     return result.body_part_colors.find(part => part.part === partName);
   };
 
-  // Screenshot functionality
-  const takeScreenshot = async (element: HTMLElement | null, filename: string) => {
-    if (!element) return;
-    
-    try {
-      const canvas = await html2canvas(element, {
-        useCORS: true,
-        scale: 2,
-        logging: false,
-        backgroundColor: '#FDFBF7'
-      });
-      
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      console.error('Error taking screenshot:', error);
-      alert('截图失败，请重试');
-    }
-  };
 
-  const handleScreenshotAll = async () => {
-    const resultContainer = document.querySelector('.animate-fade-in');
-    if (resultContainer) {
-      await takeScreenshot(resultContainer as HTMLElement, `colorscan-result-${result.subtype}.png`);
-    }
-  };
-
-  const handleScreenshotModule = async (module: string) => {
-    switch (module) {
-      case 'header':
-        await takeScreenshot(headerRef.current, `colorscan-header-${result.subtype}.png`);
-        break;
-      case 'bodyParts':
-        await takeScreenshot(bodyPartsRef.current, `colorscan-body-parts-${result.subtype}.png`);
-        break;
-      case 'dimensions':
-        await takeScreenshot(dimensionsRef.current, `colorscan-dimensions-${result.subtype}.png`);
-        break;
-      case 'radar':
-        await takeScreenshot(radarRef.current, `colorscan-radar-${result.subtype}.png`);
-        break;
-      case 'recommend':
-        await takeScreenshot(recommendRef.current, `colorscan-recommend-${result.subtype}.png`);
-        break;
-      case 'avoid':
-        await takeScreenshot(avoidRef.current, `colorscan-avoid-${result.subtype}.png`);
-        break;
-      case 'advice':
-        await takeScreenshot(adviceRef.current, `colorscan-advice-${result.subtype}.png`);
-        break;
-      default:
-        break;
-    }
-  };
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 pb-20 pt-8 animate-fade-in">
-      {/* Screenshot Button */}
-      <div className="fixed top-4 right-4 z-50">
-        <div className="bg-white rounded-full shadow-lg p-2">
-          <button 
-            onClick={handleScreenshotAll}
-            className="p-2 bg-gray-900 text-white rounded-full hover:bg-gray-800 transition-colors flex items-center gap-2"
-            title="截图保存结果"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            截图
-          </button>
-        </div>
-      </div>
+
       
       {/* 1. Header Section */}
       <div ref={headerRef} className="bg-white rounded-[2rem] shadow-xl p-8 mb-8 text-center relative overflow-hidden border border-yellow-50/50">
