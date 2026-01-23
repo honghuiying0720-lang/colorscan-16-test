@@ -66,7 +66,14 @@ if [ $? -eq 0 ]; then
     spawn scp -r dist/* root@8.134.98.247:/www/wwwroot/xindeh.xyz/colorscan16test/
     expect "password:"
     send "87368890Hxd\r"
-    expect eof
+    expect {
+        "Permission denied" {
+            exit 1
+        }
+        eof {
+            exit 0
+        }
+    }
 EOF
     
     # 检查上传是否成功
