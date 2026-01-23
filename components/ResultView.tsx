@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { AnalysisResult, ColorRecommendation, BodyPartColor } from '../types';
 import RadarChartComponent from './RadarChartComponent';
+import html2canvas from 'html2canvas';
 
 interface Props {
   result: AnalysisResult;
@@ -151,7 +152,53 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
     return result.body_part_colors.find(part => part.part === partName);
   };
 
-
+  // Screenshot function
+  const captureScreenshot = async (elementRef: React.RefObject<HTMLDivElement>, moduleName: string) => {
+    if (!elementRef.current) return;
+    
+    try {
+      // Create a temporary div to hold the screenshot
+      const tempDiv = document.createElement('div');
+      tempDiv.style.position = 'fixed';
+      tempDiv.style.top = '0';
+      tempDiv.style.left = '0';
+      tempDiv.style.width = '100%';
+      tempDiv.style.height = '100%';
+      tempDiv.style.backgroundColor = 'white';
+      tempDiv.style.zIndex = '-1';
+      document.body.appendChild(tempDiv);
+      
+      // Clone the element to avoid modifying the original
+      const clonedElement = elementRef.current.cloneNode(true) as HTMLDivElement;
+      tempDiv.appendChild(clonedElement);
+      
+      // Hide any screenshot buttons in the cloned element
+      const buttons = clonedElement.querySelectorAll('.screenshot-btn');
+      buttons.forEach(button => {
+        button.style.display = 'none';
+      });
+      
+      // Capture screenshot
+      const canvas = await html2canvas(clonedElement, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher scale for better quality
+        logging: false,
+        useCORS: true, // Allow loading images from different origins
+        removeContainer: true
+      });
+      
+      // Remove temporary div
+      document.body.removeChild(tempDiv);
+      
+      // Convert canvas to image and download
+      const link = document.createElement('a');
+      link.download = `colorscan-${moduleName}-${Date.now()}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (error) {
+      console.error('Error capturing screenshot:', error);
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto px-4 pb-20 pt-8 animate-fade-in">
@@ -159,6 +206,13 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
       
       {/* 1. Header Section */}
       <div ref={headerRef} className="bg-white rounded-[2rem] shadow-xl p-8 mb-8 text-center relative overflow-hidden border border-yellow-50/50">
+        <button 
+          onClick={() => captureScreenshot(headerRef, 'header')}
+          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
+          title="截图保存"
+        >
+          📷
+        </button>
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-300 via-orange-300 to-pink-300"></div>
         
         <div className="relative inline-block mb-6">
@@ -313,7 +367,14 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
       </div>
 
       {/* 2. Body Part Analysis */}
-      <div ref={bodyPartsRef} className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+      <div ref={bodyPartsRef} className="bg-white rounded-2xl shadow-lg p-8 mb-8 relative">
+        <button 
+          onClick={() => captureScreenshot(bodyPartsRef, 'body-parts')}
+          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
+          title="截图保存"
+        >
+          📷
+        </button>
         <h2 className="text-xl font-bold text-gray-800 text-center mb-2">部位色号分析</h2>
         <p className="text-xs text-gray-400 text-center mb-8">AI 识别您各部位的精准色号</p>
         
@@ -326,7 +387,14 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
 
       {/* 3. Color Dimensions (Bars & Radar) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div ref={dimensionsRef} className="bg-white rounded-2xl shadow-lg p-8">
+          <div ref={dimensionsRef} className="bg-white rounded-2xl shadow-lg p-8 relative">
+            <button 
+              onClick={() => captureScreenshot(dimensionsRef, 'dimensions')}
+              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
+              title="截图保存"
+            >
+              📷
+            </button>
             <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">色彩维度分析</h2>
             <ProgressBar label="色调 (冷暖倾向)" value={result.temperature} leftLabel="冷色调" rightLabel="暖色调" />
             <ProgressBar label="明度 (深浅程度)" value={result.value_score} leftLabel="深色系" rightLabel="浅色系" />
@@ -334,23 +402,51 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
             <ProgressBar label="清浊 (清透程度)" value={result.clarity} leftLabel="柔雾感" rightLabel="清透感" />
             <ProgressBar label="对比度 (明暗反差)" value={result.contrast} leftLabel="低对比" rightLabel="高对比" />
           </div>
-          <div ref={radarRef}>
+          <div ref={radarRef} className="bg-white rounded-2xl shadow-lg p-8 relative">
+            <button 
+              onClick={() => captureScreenshot(radarRef, 'radar-chart')}
+              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
+              title="截图保存"
+            >
+              📷
+            </button>
             <RadarChartComponent data={result} />
           </div>
       </div>
 
       {/* 4. Recommendations */}
       <div className="space-y-8 mb-8">
-          <div ref={recommendRef}>
+          <div ref={recommendRef} className="relative">
+            <button 
+              onClick={() => captureScreenshot(recommendRef, 'recommended-colors')}
+              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200 z-10"
+              title="截图保存"
+            >
+              📷
+            </button>
             <PaletteCard title="最适合的推荐色" items={result.recommended_colors} type="recommend" />
           </div>
-          <div ref={avoidRef}>
+          <div ref={avoidRef} className="relative">
+            <button 
+              onClick={() => captureScreenshot(avoidRef, 'avoid-colors')}
+              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200 z-10"
+              title="截图保存"
+            >
+              📷
+            </button>
             <PaletteCard title="应避开的雷区色" items={result.avoid_colors} type="avoid" />
           </div>
       </div>
 
       {/* 5. Detailed Advice */}
-      <div ref={adviceRef} className="bg-amber-50 rounded-2xl p-8 border border-amber-100 shadow-sm space-y-8">
+      <div ref={adviceRef} className="bg-amber-50 rounded-2xl p-8 border border-amber-100 shadow-sm space-y-8 relative">
+        <button 
+          onClick={() => captureScreenshot(adviceRef, 'advice')}
+          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
+          title="截图保存"
+        >
+          📷
+        </button>
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">美学建议</h2>
 
           {(() => {
