@@ -61,8 +61,13 @@ if [ $? -eq 0 ]; then
     
     # 上传文件到服务器
     echo "正在上传文件到服务器..."
-    echo "请输入服务器密码："
-    scp -r dist/* root@8.134.98.247:/www/wwwroot/xindeh.xyz/colorscan16test/
+    # 自动输入密码
+    expect << EOF
+    spawn scp -r dist/* root@8.134.98.247:/www/wwwroot/xindeh.xyz/colorscan16test/
+    expect "password:"
+    send "87368890Hxd\r"
+    expect eof
+EOF
     
     # 检查上传是否成功
     if [ $? -eq 0 ]; then
