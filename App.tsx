@@ -3,32 +3,33 @@ import { Step, AnalysisResult } from './types';
 import { analyzeImage } from './services/geminiService';
 import ResultView from './components/ResultView';
 import * as demoDataModule from './demo-data.json';
+import { toPng } from 'html-to-image';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import BatchGeneratorPage from './batch-generator/BatchGeneratorPage';
+import { SeasonalProfile, XiaohongshuNote } from './types2';
+import { Database, Scan, ArrowRightLeft } from 'lucide-react';
+import { AIServiceFactory, ModelType } from './services2/aiService';
+import { fetchAllProfilesFromFeishu } from './services2/feishuService';
+import { PromptVersion } from './batch-generator/BatchGeneratorPage';
 const demoData = demoDataModule.default || [];
 
 // --- Sub-components for Landing, Upload, Loading ---
 
-const Landing: React.FC<{ onStart: () => void; onDemoSelect: (demo: AnalysisResult) => void }> = ({ onStart, onDemoSelect }) => {
+const Landing: React.FC<{
+  onStart: () => void;
+  onDemoSelect: (demo: AnalysisResult) => void;
+  onBatchDownload: () => void;
+  isBatchDownloading: boolean;
+  batchDownloadProgress: { current: number; total: number };
+  demoResults: AnalysisResult[];
+}> = ({ onStart, onDemoSelect, onBatchDownload, isBatchDownloading, batchDownloadProgress, demoResults }) => {
   const [selectedSeason, setSelectedSeason] = useState<string>('spring');
-  
+
   // 从对象结构中提取所有色彩数据并过滤出对应季节的
-  const getAllDemos = () => {
-    if (typeof demoData === 'object' && demoData !== null) {
-      return Object.values(demoData);
-    }
-    return [];
-  };
+  const seasonDemos = demoResults.filter(demo => demo.season === selectedSeason);
   
-  const seasonDemos = getAllDemos().filter(demo => demo.season === selectedSeason);
-  
-  const seasons = ['spring', 'summer', 'autumn', 'winter'];
-  const seasonNames = {
-    spring: '春季型',
-    summer: '夏季型',
-    autumn: '秋季型',
-    winter: '冬季型'
-  };
-  
-  const subtypeNames = {
+  const subtypeNames: Record<string, string> = {
     clear_spring: '净春型',
     light_spring: '浅春型',
     soft_spring: '柔春型',
@@ -45,6 +46,15 @@ const Landing: React.FC<{ onStart: () => void; onDemoSelect: (demo: AnalysisResu
     bright_winter: '亮冬型',
     deep_winter: '深冬型',
     clear_winter: '净冬型'
+  };
+  
+  
+  const seasons = ['spring', 'summer', 'autumn', 'winter'];
+  const seasonNames = {
+    spring: '春季型',
+    summer: '夏季型',
+    autumn: '秋季型',
+    winter: '冬季型'
   };
   
   return (
@@ -79,12 +89,38 @@ const Landing: React.FC<{ onStart: () => void; onDemoSelect: (demo: AnalysisResu
           <div className="h-12 bg-purple-200 rounded-lg"></div>
       </div>
 
-      <button 
-        onClick={onStart}
-        className="bg-gray-900 text-white text-lg font-bold py-4 px-16 rounded-full shadow-xl hover:bg-gray-800 transform transition hover:scale-105 active:scale-95 mb-16"
-      >
-        开始测试
-      </button>
+      <div className="flex flex-col gap-4 mb-16">
+        <button
+          onClick={onStart}
+          className="bg-gray-900 text-white text-lg font-bold py-4 px-16 rounded-full shadow-xl hover:bg-gray-800 transform transition hover:scale-105 active:scale-95"
+        >
+          开始测试
+        </button>
+
+        <button
+          onClick={onBatchDownload}
+          disabled={isBatchDownloading}
+          className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white text-lg font-bold py-4 px-16 rounded-full shadow-xl transform transition hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+        >
+          {isBatchDownloading ? (
+            <>
+              <span className="animate-spin">⏳</span>
+              正在下载 {batchDownloadProgress.current}/{batchDownloadProgress.total}...
+            </>
+          ) : (
+            <>
+              📦 依次打开并下载所有16种类型（全部模块）
+            </>
+          )}
+        </button>
+        {isBatchDownloading && (
+          <div className="text-sm text-gray-500 mt-2 space-y-1">
+            <p>正在依次打开每个类型的结果页面并下载...</p>
+            <p>进度: {batchDownloadProgress.current}/{batchDownloadProgress.total} ({Math.round((batchDownloadProgress.current / batchDownloadProgress.total) * 100)}%)</p>
+            <p className="text-xs">共 {batchDownloadProgress.total * 8} 张截图，请耐心等待...</p>
+          </div>
+        )}
+      </div>
       
       {/* Demo Section */}
       <div className="w-full max-w-4xl mt-8">
@@ -109,13 +145,15 @@ const Landing: React.FC<{ onStart: () => void; onDemoSelect: (demo: AnalysisResu
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {seasonDemos.map((demo, index) => {
             return (
-              <div 
+              <div
                 key={index}
                 onClick={() => onDemoSelect(demo)}
                 className="bg-white rounded-xl shadow-md p-4 border border-gray-100 hover:shadow-lg cursor-pointer transition-all transform hover:scale-105"
               >
-                <div className="h-12 rounded-lg mb-4" style={{ 
-                  background: `linear-gradient(45deg, ${demo.recommended_colors[0].hex}, ${demo.recommended_colors[1].hex})` 
+                <div className="h-12 rounded-lg mb-4" style={{
+                  background: demo.recommended_colors && demo.recommended_colors.length >= 2
+                    ? `linear-gradient(45deg, ${demo.recommended_colors[0].hex}, ${demo.recommended_colors[1].hex})`
+                    : '#E5E7EB'
                 }}></div>
                 <h4 className="font-bold text-gray-800 mb-1">{subtypeNames[demo.subtype as keyof typeof subtypeNames]}</h4>
                 <p className="text-sm text-gray-500 mb-3">
@@ -367,6 +405,122 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [usageInfo, setUsageInfo] = useState<{ canUse: boolean; remaining: number }>(checkAndUpdateUsage);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isBatchDownloading, setIsBatchDownloading] = useState<boolean>(false);
+  const [batchDownloadProgress, setBatchDownloadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
+  const [appMode, setAppMode] = useState<AppMode>('test');
+  // 批量生成相关的状态（提升到 App 级别，切换模式时保留）
+  const [batchResults, setBatchResults] = useState<SeasonalProfile[]>([]);
+  const [batchNotes, setBatchNotes] = useState<Record<string, XiaohongshuNote>>({});
+  const [batchIsGenerating, setBatchIsGenerating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const [batchCurrentProcessing, setBatchCurrentProcessing] = useState<string | null>(null);
+  const [batchError, setBatchError] = useState<string | null>(null);
+  const [batchAutoGenerateNotes, setBatchAutoGenerateNotes] = useState(true);
+  const [batchSelectedModel, setBatchSelectedModel] = useState<ModelType>(ModelType.DOUBAO);
+  const [batchGeneratingNotes, setBatchGeneratingNotes] = useState<Set<string>>(new Set());
+  const [batchSyncingToFeishu, setBatchSyncingToFeishu] = useState(false);
+  const [batchFeishuSyncResult, setBatchFeishuSyncResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [batchTestingSubtype, setBatchTestingSubtype] = useState<string | null>(null);
+  const [batchPromptVersion, setBatchPromptVersion] = useState<PromptVersion>('simple');
+  const downloadModuleRef = useRef<(() => Promise<{ [key: string]: string }>) | null>(null);
+
+  // 获取所有演示数据（必须在使用前定义）
+  const getAllDemos = (): AnalysisResult[] => {
+    if (typeof demoData === 'object' && demoData !== null) {
+      return Object.values(demoData);
+    }
+    return [];
+  };
+
+  const [demoResults, setDemoResults] = useState<AnalysisResult[]>(() => getAllDemos());
+
+  // 定义固定的类型顺序（按 subtypeNames 定义）
+  const SUBTYPE_ORDER = [
+    'clear_spring', 'light_spring', 'soft_spring', 'bright_spring',
+    'light_summer', 'soft_summer', 'bright_summer', 'deep_summer',
+    'soft_autumn', 'bright_autumn', 'deep_autumn', 'light_autumn',
+    'soft_winter', 'bright_winter', 'deep_winter', 'clear_winter'
+  ];
+
+  // 将 SeasonalProfile 转换为 AnalysisResult 格式
+  const convertToAnalysisResult = (profile: SeasonalProfile): AnalysisResult => {
+    return {
+      subtype: profile.subtype,
+      season: profile.season,
+      temperature: profile.temperature,
+      value_score: profile.value_score,
+      chroma: profile.chroma,
+      clarity: profile.clarity,
+      contrast: profile.contrast,
+      body_part_colors: profile.body_part_colors,
+      recommended_colors: profile.recommended_colors,
+      avoid_colors: profile.avoid_colors,
+      detailed_styling_tips: {
+        fashion_matching: profile.detailed_styling_tips.fashion_matching,
+        celebrity_reference: profile.detailed_styling_tips.celebrity_reference,
+        jewelry_colors: profile.detailed_styling_tips.jewelry_colors,
+        makeup_details: profile.detailed_styling_tips.makeup_details
+      },
+      makeup_tips: profile.makeup_tips,
+      styling_tips: profile.styling_tips,
+      star_reference: profile.detailed_styling_tips.celebrity_reference,
+      accessories_tips: profile.detailed_styling_tips.jewelry_colors
+    };
+  };
+
+  // 组件挂载时从飞书读取数据
+  useEffect(() => {
+    const loadFromFeishu = async () => {
+      try {
+        console.log('[App] 尝试从飞书读取数据...');
+        const feishuProfiles = await fetchAllProfilesFromFeishu();
+
+        if (Object.keys(feishuProfiles).length > 0) {
+          console.log(`[App] 从飞书读取到 ${Object.keys(feishuProfiles).length} 个 profiles`);
+
+          // 转换为 AnalysisResult 并更新 demoResults
+          const profilesArray = Object.values(feishuProfiles).map(convertToAnalysisResult);
+
+          // 按固定顺序排列
+          const sortedProfiles = SUBTYPE_ORDER
+            .map(subtype => profilesArray.find(p => p.subtype === subtype))
+            .filter((p): p is AnalysisResult => p !== undefined);
+
+          setDemoResults(sortedProfiles);
+          console.log('[App] ✅ 已从飞书加载数据并更新演示界面');
+        } else {
+          console.log('[App] 飞书没有数据，使用本地 demo-data.json');
+        }
+      } catch (error: any) {
+        console.warn('[App] 从飞书读取数据失败，将使用本地数据:', error.message);
+      }
+    };
+
+    loadFromFeishu();
+  }, []); // 只在挂载时执行一次
+
+  // 同步到测试模式的回调函数（生成色彩后、生成笔记前调用）
+  const handleSyncToTestMode = (profile: SeasonalProfile) => {
+    setDemoResults(prev => {
+      // 合并新旧数据，按固定顺序排列
+      const mergedMap = new Map<string, AnalysisResult>();
+
+      // 先加入原有数据
+      prev.forEach(demo => {
+        mergedMap.set(demo.subtype, demo);
+      });
+
+      // 更新新数据
+      const newDemo = convertToAnalysisResult(profile);
+      mergedMap.set(profile.subtype, newDemo);
+
+      // 按固定顺序重新排列
+      return SUBTYPE_ORDER
+        .map(subtype => mergedMap.get(subtype))
+        .filter((demo): demo is AnalysisResult => demo !== undefined);
+    });
+    console.log(`[App] ✅ 已同步到测试模式: ${profile.subtype}`);
+  };
 
   // 组件挂载后设置加载状态为 false
   useEffect(() => {
@@ -389,7 +543,128 @@ const App: React.FC = () => {
     setStep('result');
     localStorage.setItem('step', 'result');
   };
+  
+  // 处理ResultView的下载准备回调
+  const handleDownloadReady = (downloadFn: () => Promise<{ [key: string]: string }>) => {
+    downloadModuleRef.current = downloadFn;
+  };
+  
+  // 批量下载所有类型
+  const handleBatchDownloadAll = async () => {
+    if (isBatchDownloading) return;
 
+    const confirmed = window.confirm(
+      '将依次打开所有16种色彩类型的结果页面并下载所有模块截图（共128张图片）。\n\n' +
+      '这可能需要几分钟时间，请确保网络连接稳定。\n\n' +
+      '是否继续？'
+    );
+
+    if (!confirmed) return;
+
+    setIsBatchDownloading(true);
+
+    try {
+      // 使用更新后的 demoResults 状态，而不是原始的 demo-data.json
+      const allDemos = demoResults.length > 0 ? demoResults : getAllDemos();
+      console.log(`[批量下载] 使用 ${allDemos.length} 个演示数据进行下载`);
+      if (allDemos.length > 0) {
+        console.log(`[批量下载] 第一个数据类型: ${allDemos[0].subtype}`);
+      }
+
+      setBatchDownloadProgress({ current: 0, total: allDemos.length });
+
+      const zip = new JSZip();
+      const subtypeNames: Record<string, string> = {
+        clear_spring: '净春型',
+        light_spring: '浅春型',
+        soft_spring: '柔春型',
+        bright_spring: '亮春型',
+        light_summer: '浅夏型',
+        soft_summer: '柔夏型',
+        bright_summer: '亮夏型',
+        deep_summer: '深夏型',
+        soft_autumn: '柔秋型',
+        bright_autumn: '亮秋型',
+        deep_autumn: '深秋型',
+        light_autumn: '浅秋型',
+        soft_winter: '柔冬型',
+        bright_winter: '亮冬型',
+        deep_winter: '深冬型',
+        clear_winter: '净冬型'
+      };
+
+      // 依次打开每个类型并下载
+      for (let i = 0; i < allDemos.length; i++) {
+        const demo = allDemos[i];
+        const subtypeName = subtypeNames[demo.subtype] || demo.subtype;
+        const folderNumber = i + 1; // 序号从1开始
+        const folderName = `${folderNumber}-${subtypeName}`;
+
+        console.log(`[批量下载] 正在下载: ${folderName}`);
+
+        // 打开当前类型的结果页面
+        setResult(demo);
+        localStorage.setItem('result', JSON.stringify(demo));
+        setStep('result');
+        localStorage.setItem('step', 'result');
+        setBatchDownloadProgress({ current: i + 1, total: allDemos.length });
+
+        // 等待页面渲染完成
+        await new Promise<void>(resolve => setTimeout(resolve, 1500));
+
+        // 等待下载方法准备好
+        let retries = 0;
+        while (!downloadModuleRef.current && retries < 10) {
+          await new Promise<void>(resolve => setTimeout(resolve, 200));
+          retries++;
+        }
+
+        if (downloadModuleRef.current) {
+          try {
+            // 下载当前页面的所有模块
+            const moduleImages = await downloadModuleRef.current();
+
+            // 将图片添加到ZIP，放在对应的文件夹中
+            for (const [moduleName, dataUrl] of Object.entries(moduleImages)) {
+              const base64 = (dataUrl as string).split(',')[1] || '';
+              const fileName = `${folderName}/${moduleName}.png`;
+              zip.file(fileName, base64, { base64: true });
+            }
+
+            console.log(`✅ 已下载: ${folderName} (${i + 1}/${allDemos.length})`);
+          } catch (error) {
+            console.error(`下载 ${folderName} 时出错:`, error);
+          }
+        } else {
+          console.warn(`无法获取 ${folderName} 的下载方法`);
+        }
+
+        // 清空下载方法引用，准备下一个
+        downloadModuleRef.current = null;
+      }
+
+      // 生成ZIP文件
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+      saveAs(blob, `colorscan-16种类型-全部模块-${timestamp}.zip`);
+
+      // 恢复初始状态
+      setStep('landing');
+      setResult(null);
+      localStorage.setItem('step', 'landing');
+      localStorage.removeItem('result');
+
+      alert(`✅ 下载完成！\n\n共 ${allDemos.length} 种类型\n每种类型 8 个模块\n总计 ${allDemos.length * 8} 张图片`);
+    } catch (error) {
+      console.error('批量下载出错:', error);
+      alert('下载失败，请重试。\n\n错误信息：' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setIsBatchDownloading(false);
+      setBatchDownloadProgress({ current: 0, total: 0 });
+      downloadModuleRef.current = null;
+    }
+  };
+  
   const handleAnalyze = async (file: File) => {
     // 检查使用次数
     const usage = checkAndUpdateUsage();
@@ -456,28 +731,113 @@ const App: React.FC = () => {
     localStorage.setItem('step', 'upload');
   };
 
+  // 切换模式 - 只重置测试模式的状态，保留批量生成的状态
+  const toggleMode = () => {
+    setAppMode(prev => prev === 'test' ? 'batch' : 'test');
+    // 只有在切换到测试模式时才重置测试相关状态
+    setStep('landing');
+    setResult(null);
+    setError(null);
+    localStorage.removeItem('step');
+    localStorage.removeItem('result');
+  };
+
   return (
-    <div className="min-h-screen bg-[#FDFBF7] font-sans">
+    <div className="min-h-screen bg-[#FDFBF7] font-sans relative">
+      {/* Mode Toggle Button */}
+      <button
+        onClick={toggleMode}
+        className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-lg border border-gray-200 hover:shadow-xl hover:scale-105 transition-all"
+      >
+        <ArrowRightLeft className="w-4 h-4 text-gray-600" />
+        <span className="text-sm font-medium text-gray-700">
+          {appMode === 'test' ? '批量生成' : '返回测试'}
+        </span>
+      </button>
+
+      {/* Mode Indicator */}
+      <div className="fixed top-4 left-4 z-50 px-3 py-1.5 bg-white rounded-full shadow-md border border-gray-200">
+        {appMode === 'test' ? (
+          <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <Scan className="w-4 h-4" />
+            测试模式
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm font-medium text-purple-700">
+            <Database className="w-4 h-4" />
+            批量生成模式
+          </div>
+        )}
+      </div>
+
       {isLoading ? (
         <AppLoading />
       ) : (
         <>
-          {step === 'landing' && <Landing onStart={handleStart} onDemoSelect={handleDemoSelect} />}
-          {step === 'upload' && (
+          {appMode === 'batch' ? (
+            <BatchGeneratorPage
+              results={batchResults}
+              setResults={setBatchResults}
+              notes={batchNotes}
+              setNotes={setBatchNotes}
+              isGenerating={batchIsGenerating}
+              setIsGenerating={setBatchIsGenerating}
+              progress={batchProgress}
+              setProgress={setBatchProgress}
+              currentProcessing={batchCurrentProcessing}
+              setCurrentProcessing={setBatchCurrentProcessing}
+              error={batchError}
+              setError={setBatchError}
+              autoGenerateNotes={batchAutoGenerateNotes}
+              setAutoGenerateNotes={setBatchAutoGenerateNotes}
+              selectedModel={batchSelectedModel}
+              setSelectedModel={setBatchSelectedModel}
+              generatingNotes={batchGeneratingNotes}
+              setGeneratingNotes={setBatchGeneratingNotes}
+              syncingToFeishu={batchSyncingToFeishu}
+              setSyncingToFeishu={setBatchSyncingToFeishu}
+              feishuSyncResult={batchFeishuSyncResult}
+              setFeishuSyncResult={setBatchFeishuSyncResult}
+              testingSubtype={batchTestingSubtype}
+              setTestingSubtype={setBatchTestingSubtype}
+              promptVersion={batchPromptVersion}
+              setPromptVersion={setBatchPromptVersion}
+              onSyncToTestMode={handleSyncToTestMode}
+            />
+          ) : (
             <>
-                {error && (
+              {step === 'landing' && (
+                <Landing
+                  onStart={handleStart}
+                  onDemoSelect={handleDemoSelect}
+                  onBatchDownload={handleBatchDownloadAll}
+                  isBatchDownloading={isBatchDownloading}
+                  batchDownloadProgress={batchDownloadProgress}
+                  demoResults={demoResults}
+                />
+              )}
+              {step === 'upload' && (
+                <>
+                  {error && (
                     <div className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4">
-                        <div className="bg-red-50 text-red-600 px-6 py-3 rounded-full shadow-lg text-sm font-medium border border-red-100">
-                            {error}
-                        </div>
+                      <div className="bg-red-50 text-red-600 px-6 py-3 rounded-full shadow-lg text-sm font-medium border border-red-100">
+                        {error}
+                      </div>
                     </div>
-                )}
-                <UploadSection onAnalyze={handleAnalyze} remainingUsage={usageInfo.remaining} />
+                  )}
+                  <UploadSection onAnalyze={handleAnalyze} remainingUsage={usageInfo.remaining} />
+                </>
+              )}
+              {step === 'analyzing' && <LoadingScreen onTimeout={handleAnalysisTimeout} />}
+              {step === 'result' && result && (
+                <ResultView
+                  result={result}
+                  userImage={userImage}
+                  onReset={handleReset}
+                  onDownloadReady={isBatchDownloading ? handleDownloadReady : undefined}
+                />
+              )}
             </>
-          )}
-          {step === 'analyzing' && <LoadingScreen onTimeout={handleAnalysisTimeout} />}
-          {step === 'result' && result && (
-            <ResultView result={result} userImage={userImage} onReset={handleReset} />
           )}
         </>
       )}

@@ -10,11 +10,26 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
         proxy: {
-          // 把前端的 /api/v3/chat/completions 代理到真实模型服务，解决 404 和浏览器直连跨域问题
-          '/api': {
-            target: env.API_BASE_URL || 'https://ark.cn-beijing.volces.com',
+          // 豆包 API 代理
+          '/doubao-api': {
+            target: 'https://ark.cn-beijing.volces.com',
             changeOrigin: true,
             secure: true,
+            rewrite: (path) => path.replace(/^\/doubao-api/, ''),
+          },
+          // DeepSeek API 代理
+          '/deepseek-api': {
+            target: 'https://api.deepseek.com',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (path) => path.replace(/^\/deepseek-api/, ''),
+          },
+          // 飞书 API 代理
+          '/feishu-api': {
+            target: 'https://open.feishu.cn',
+            changeOrigin: true,
+            secure: true,
+            rewrite: (path) => path.replace(/^\/feishu-api/, '/open-apis'),
           },
         },
       },

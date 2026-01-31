@@ -1,12 +1,15 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnalysisResult, ColorRecommendation, BodyPartColor } from '../types';
 import RadarChartComponent from './RadarChartComponent';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 interface Props {
   result: AnalysisResult;
   userImage: string;
   onReset: () => void;
+  onDownloadReady?: (downloadFn: () => Promise<{ [key: string]: string }>) => void;
 }
 
 const SeasonBadge: React.FC<{ season: string }> = ({ season }) => {
@@ -131,7 +134,8 @@ const ProgressBar: React.FC<{ label: string; value: number; leftLabel: string; r
   </div>
 );
 
-const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
+const ResultView: React.FC<Props> = ({ result, userImage, onReset, onDownloadReady }) => {
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   
   // Refs for components
   const headerRef = useRef<HTMLDivElement>(null);
@@ -140,63 +144,138 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
   const radarRef = useRef<HTMLDivElement>(null);
   const recommendRef = useRef<HTMLDivElement>(null);
   const avoidRef = useRef<HTMLDivElement>(null);
-  const adviceRef = useRef<HTMLDivElement>(null);
+  const advicePart1Ref = useRef<HTMLDivElement>(null);
+  const advicePart2Ref = useRef<HTMLDivElement>(null);
+  const downloadButtonRef = useRef<HTMLButtonElement>(null);
   
   // Scroll to top on mount
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+  
+  // 导出当前页面的所有模块为图片（返回base64数据）
+  const exportCurrentPageModules = async (): Promise<{ [key: string]: string }> => {
+    const modules: Array<{ name: string; ref: React.RefObject<HTMLDivElement> }> = [
+      { name: 'header', ref: headerRef },
+      { name: 'body-parts', ref: bodyPartsRef },
+      { name: 'dimensions', ref: dimensionsRef },
+      { name: 'radar-chart', ref: radarRef },
+      { name: 'recommended-colors', ref: recommendRef },
+      { name: 'avoid-colors', ref: avoidRef },
+      { name: 'advice-part1', ref: advicePart1Ref },
+      { name: 'advice-part2', ref: advicePart2Ref },
+    ];
+    
+    const results: { [key: string]: string } = {};
+    
+    // 隐藏下载按钮
+    if (downloadButtonRef.current) {
+      downloadButtonRef.current.style.display = 'none';
+    }
+    
+    for (const module of modules) {
+      if (!module.ref.current) continue;
+      try {
+        const dataUrl = await exportModuleToPng(module.ref.current, module.name);
+        results[module.name] = dataUrl;
+      } catch (error) {
+        console.error(`Error capturing ${module.name}:`, error);
+      }
+    }
+    
+    // 恢复下载按钮
+    if (downloadButtonRef.current) {
+      downloadButtonRef.current.style.display = '';
+    }
+    
+    return results;
+  };
+  
+  // 当组件挂载且onDownloadReady存在时，暴露下载方法
+  useEffect(() => {
+    if (onDownloadReady) {
+      onDownloadReady(exportCurrentPageModules);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDownloadReady, result]);
 
   // Get body part color by part name
   const getBodyPartColor = (partName: string) => {
-    return result.body_part_colors.find(part => part.part === partName);
+    return result.body_part_colors?.find(part => part.part === partName);
   };
 
-  // Screenshot function
-  const captureScreenshot = async (elementRef: React.RefObject<HTMLDivElement>, moduleName: string) => {
-    if (!elementRef.current) return;
+  // Wait for fonts + layout to settle
+  const waitForStableLayout = async () => {
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  };
+
+  // Export single module to PNG
+  const exportModuleToPng = async (node: HTMLDivElement, moduleName: string) => {
+    await waitForStableLayout();
+    return await toPng(node, {
+      backgroundColor: '#ffffff',
+      cacheBust: true,
+      pixelRatio: 2,
+      skipFonts: true,
+      fontEmbedCSS: '',
+      style: {
+        fontFamily:
+          'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif',
+      },
+      filter: () => true, // No filtering needed, download button is already hidden via display: none
+    });
+  };
+
+  // One-click download all modules as ZIP
+  const downloadAllScreenshots = async () => {
+    if (isDownloadingAll) return;
+    setIsDownloadingAll(true);
+    
+    // Hide download button to avoid capturing it in screenshots
+    if (downloadButtonRef.current) {
+      downloadButtonRef.current.style.display = 'none';
+    }
     
     try {
-      // Create a temporary div to hold the screenshot
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'fixed';
-      tempDiv.style.top = '0';
-      tempDiv.style.left = '0';
-      tempDiv.style.width = '100%';
-      tempDiv.style.height = '100%';
-      tempDiv.style.backgroundColor = 'white';
-      tempDiv.style.zIndex = '-1';
-      document.body.appendChild(tempDiv);
+      const modules: Array<{ name: string; ref: React.RefObject<HTMLDivElement> }> = [
+        { name: 'header', ref: headerRef },
+        { name: 'body-parts', ref: bodyPartsRef },
+        { name: 'dimensions', ref: dimensionsRef },
+        { name: 'radar-chart', ref: radarRef },
+        { name: 'recommended-colors', ref: recommendRef },
+        { name: 'avoid-colors', ref: avoidRef },
+        { name: 'advice-part1', ref: advicePart1Ref },
+        { name: 'advice-part2', ref: advicePart2Ref },
+      ];
+
+      const zip = new JSZip();
       
-      // Clone the element to avoid modifying the original
-      const clonedElement = elementRef.current.cloneNode(true) as HTMLDivElement;
-      tempDiv.appendChild(clonedElement);
-      
-      // Hide any screenshot buttons in the cloned element
-      const buttons = clonedElement.querySelectorAll('.screenshot-btn');
-      buttons.forEach(button => {
-        button.style.display = 'none';
-      });
-      
-      // Capture screenshot
-      const canvas = await html2canvas(clonedElement, {
-        backgroundColor: '#ffffff',
-        scale: 2, // Higher scale for better quality
-        logging: false,
-        useCORS: true, // Allow loading images from different origins
-        removeContainer: true
-      });
-      
-      // Remove temporary div
-      document.body.removeChild(tempDiv);
-      
-      // Convert canvas to image and download
-      const link = document.createElement('a');
-      link.download = `colorscan-${moduleName}-${Date.now()}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      for (const module of modules) {
+        if (!module.ref.current) continue;
+        try {
+          const dataUrl = await exportModuleToPng(module.ref.current, module.name);
+          const base64 = dataUrl.split(',')[1] || '';
+          zip.file(`colorscan-${module.name}-${Date.now()}.png`, base64, { base64: true });
+        } catch (error) {
+          console.error(`Error capturing ${module.name}:`, error);
+        }
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      saveAs(blob, `colorscan-all-modules-${Date.now()}.zip`);
     } catch (error) {
-      console.error('Error capturing screenshot:', error);
+      console.error('Error downloading all screenshots:', error);
+      alert('下载失败，请重试');
+    } finally {
+      setIsDownloadingAll(false);
+      // Show download button again after all screenshots are done
+      if (downloadButtonRef.current) {
+        downloadButtonRef.current.style.display = '';
+      }
     }
   };
 
@@ -205,14 +284,18 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
 
       
       {/* 1. Header Section */}
-      <div ref={headerRef} className="bg-white rounded-[2rem] shadow-xl p-8 mb-8 text-center relative overflow-hidden border border-yellow-50/50">
-        <button 
-          onClick={() => captureScreenshot(headerRef, 'header')}
-          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
-          title="截图保存"
-        >
-          📷
-        </button>
+      <div ref={headerRef} data-module="header" className="bg-white rounded-[2rem] shadow-xl p-8 mb-8 text-center relative overflow-hidden border border-yellow-50/50">
+        <div className="absolute top-4 left-4 flex gap-2">
+          <button
+            ref={downloadButtonRef}
+            onClick={downloadAllScreenshots}
+            disabled={isDownloadingAll}
+            className="bg-amber-400 hover:bg-amber-500 disabled:bg-amber-300 text-white rounded-full px-4 py-2 text-sm font-bold shadow-md transition-colors duration-200 flex items-center gap-2"
+            title="一键下载所有模块截图"
+          >
+            {isDownloadingAll ? '⏳ 打包中...' : '📦 一键下载全部'}
+          </button>
+        </div>
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-300 via-orange-300 to-pink-300"></div>
         
         <div className="relative inline-block mb-6">
@@ -272,7 +355,13 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
                 }
                 
                 return tags.map(tag => (
-                    <span key={tag} className="px-3 py-1 bg-yellow-400 text-white text-xs rounded-full font-bold shadow-sm">{tag}</span>
+                  <span
+                    key={tag}
+                    className="inline-block h-9 px-5 bg-yellow-400 text-white text-xs rounded-full font-bold shadow-sm text-center"
+                    style={{ lineHeight: '36px' }}
+                  >
+                    {tag}
+                  </span>
                 ));
              })()}
         </div>
@@ -373,19 +462,12 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
       </div>
 
       {/* 2. Body Part Analysis */}
-      <div ref={bodyPartsRef} className="bg-white rounded-2xl shadow-lg p-8 mb-8 relative">
-        <button 
-          onClick={() => captureScreenshot(bodyPartsRef, 'body-parts')}
-          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
-          title="截图保存"
-        >
-          📷
-        </button>
+      <div ref={bodyPartsRef} data-module="body-parts" className="bg-white rounded-2xl shadow-lg p-8 mb-8 relative">
         <h2 className="text-xl font-bold text-gray-800 text-center mb-2">部位色号分析</h2>
         <p className="text-xs text-gray-400 text-center mb-8">AI 识别您各部位的精准色号</p>
         
         <div className="grid grid-cols-2 md:grid-cols-3 gap-y-8 gap-x-4 justify-items-center">
-            {result.body_part_colors.map((part, idx) => (
+            {(result.body_part_colors || []).map((part, idx) => (
                 <ColorSwatch key={idx} color={part.color} label={part.part} subLabel={part.color} />
             ))}
         </div>
@@ -393,14 +475,7 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
 
       {/* 3. Color Dimensions (Bars & Radar) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div ref={dimensionsRef} className="bg-white rounded-2xl shadow-lg p-8 relative">
-            <button 
-              onClick={() => captureScreenshot(dimensionsRef, 'dimensions')}
-              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
-              title="截图保存"
-            >
-              📷
-            </button>
+          <div ref={dimensionsRef} data-module="dimensions" className="bg-white rounded-2xl shadow-lg p-8 relative">
             <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">色彩维度分析</h2>
             <ProgressBar label="色调 (冷暖倾向)" value={result.temperature} leftLabel="冷色调" rightLabel="暖色调" />
             <ProgressBar label="明度 (深浅程度)" value={result.value_score} leftLabel="深色系" rightLabel="浅色系" />
@@ -408,51 +483,23 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
             <ProgressBar label="清浊 (清透程度)" value={result.clarity} leftLabel="柔雾感" rightLabel="清透感" />
             <ProgressBar label="对比度 (明暗反差)" value={result.contrast} leftLabel="低对比" rightLabel="高对比" />
           </div>
-          <div ref={radarRef} className="bg-white rounded-2xl shadow-lg p-8 relative">
-            <button 
-              onClick={() => captureScreenshot(radarRef, 'radar-chart')}
-              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
-              title="截图保存"
-            >
-              📷
-            </button>
+          <div ref={radarRef} data-module="radar-chart" className="bg-white rounded-2xl shadow-lg p-8 relative">
             <RadarChartComponent data={result} />
           </div>
       </div>
 
       {/* 4. Recommendations */}
       <div className="space-y-8 mb-8">
-          <div ref={recommendRef} className="relative">
-            <button 
-              onClick={() => captureScreenshot(recommendRef, 'recommended-colors')}
-              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200 z-10"
-              title="截图保存"
-            >
-              📷
-            </button>
+          <div ref={recommendRef} data-module="recommended-colors" className="relative">
             <PaletteCard title="最适合的推荐色" items={result.recommended_colors} type="recommend" />
           </div>
-          <div ref={avoidRef} className="relative">
-            <button 
-              onClick={() => captureScreenshot(avoidRef, 'avoid-colors')}
-              className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200 z-10"
-              title="截图保存"
-            >
-              📷
-            </button>
+          <div ref={avoidRef} data-module="avoid-colors" className="relative">
             <PaletteCard title="应避开的雷区色" items={result.avoid_colors} type="avoid" />
           </div>
       </div>
 
-      {/* 5. Detailed Advice */}
-      <div ref={adviceRef} className="bg-amber-50 rounded-2xl p-8 border border-amber-100 shadow-sm space-y-8 relative">
-        <button 
-          onClick={() => captureScreenshot(adviceRef, 'advice')}
-          className="screenshot-btn absolute top-4 right-4 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-2 transition-colors duration-200"
-          title="截图保存"
-        >
-          📷
-        </button>
+      {/* 5. Detailed Advice - Part 1 (前2部分) */}
+      <div ref={advicePart1Ref} data-module="advice-part1" className="bg-amber-50 rounded-2xl p-8 border border-amber-100 shadow-sm space-y-8 relative">
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">美学建议</h2>
 
           {(() => {
@@ -475,22 +522,6 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
                          {result.detailed_styling_tips.celebrity_reference}
                      </p>
                   </div>
-
-                  <div className="bg-white p-6 rounded-xl shadow-sm">
-                     <h3 className="font-bold text-lg text-amber-600 mb-3 flex items-center gap-2">
-                        💎 饰品颜色建议
-                    </h3>
-                     <p className="text-gray-700 text-sm leading-7 whitespace-pre-line">
-                         {result.detailed_styling_tips.jewelry_colors}
-                     </p>
-                  </div>
-
-                  <div className="bg-white p-6 rounded-xl shadow-sm">
-                     <h3 className="font-bold text-lg text-amber-600 mb-3 flex items-center gap-2">
-                        💋 口红腮红妆容建议
-                    </h3>
-                     <p className="text-gray-700 text-sm leading-7 whitespace-pre-line">{result.detailed_styling_tips.makeup_details}</p>
-                  </div>
                 </>
               );
             } else {
@@ -512,7 +543,41 @@ const ResultView: React.FC<Props> = ({ result, userImage, onReset }) => {
                          {result.star_reference || "该色型通常具有鲜明的个人特色，参考同类型明星的穿搭能更快找到灵感。"}
                      </p>
                   </div>
+                </>
+              );
+            }
+          })()}
+      </div>
 
+      {/* 6. Detailed Advice - Part 2 (后3部分) */}
+      <div ref={advicePart2Ref} data-module="advice-part2" className="bg-amber-50 rounded-2xl p-8 border border-amber-100 shadow-sm space-y-8 relative mt-8">
+
+          {(() => {
+            // 检查 detailed_styling_tips 是否为对象
+            if (typeof result.detailed_styling_tips === 'object' && result.detailed_styling_tips !== null) {
+              return (
+                <>
+                  <div className="bg-white p-6 rounded-xl shadow-sm">
+                     <h3 className="font-bold text-lg text-amber-600 mb-3 flex items-center gap-2">
+                        💎 饰品颜色建议
+                    </h3>
+                     <p className="text-gray-700 text-sm leading-7 whitespace-pre-line">
+                         {result.detailed_styling_tips.jewelry_colors}
+                     </p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm">
+                     <h3 className="font-bold text-lg text-amber-600 mb-3 flex items-center gap-2">
+                        💋 口红腮红妆容建议
+                    </h3>
+                     <p className="text-gray-700 text-sm leading-7 whitespace-pre-line">{result.detailed_styling_tips.makeup_details}</p>
+                  </div>
+                </>
+              );
+            } else {
+              // 保持原来的渲染方式（如果它仍然是字符串）
+              return (
+                <>
                   <div className="bg-white p-6 rounded-xl shadow-sm">
                      <h3 className="font-bold text-lg text-amber-600 mb-3 flex items-center gap-2">
                         💎 饰品颜色建议

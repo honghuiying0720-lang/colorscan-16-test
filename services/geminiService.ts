@@ -89,6 +89,11 @@ export const analyzeImage = async (base64Image: string): Promise<AnalysisResult>
     throw new Error("API Key is missing.");
   }
 
+  // ========== 调试日志：打印完整提示词 ==========
+  console.log(`\n========== [测试模式] 发送给AI的完整提示词 ==========`);
+  console.log(SYSTEM_PROMPT);
+  console.log(`========== 提示词结束 ==========\n`);
+
   try {
     // 使用百度千帆的视觉理解 API
     const imageDataUrl = `data:image/jpeg;base64,${base64Image}`;
