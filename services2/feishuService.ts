@@ -106,9 +106,18 @@ async function getTableFields(accessToken: string): Promise<Record<string, strin
         const fieldNameZh = field.field_name || ''; // 原始字段名（中文）
         const fieldType = field.type || '';
 
+        // 简短标题字段匹配（必须在标题之前，因为"简短标题"包含"标题"）
+        if (fieldName.includes('简短') || fieldName.includes('short') ||
+            fieldNameZh.includes('简短') || fieldNameZh.includes('简短标题')) {
+          if (!fieldMap['shorttitle']) {
+            fieldMap['shorttitle'] = fieldNameZh; // 使用原始字段名（中文）
+            fieldTypes['shorttitle'] = fieldType;
+            console.log('[飞书同步] ✅ 找到简短标题字段:', fieldNameZh, '类型:', fieldType);
+          }
+        }
         // 标题字段匹配
-        if (fieldName.includes('标题') || fieldName.includes('title') ||
-            fieldNameZh.includes('标题')) {
+        else if (fieldName.includes('标题') || fieldName.includes('title') ||
+                 fieldNameZh.includes('标题')) {
           if (!fieldMap['title']) {
             fieldMap['title'] = fieldNameZh; // 使用原始字段名（中文）
             fieldTypes['title'] = fieldType;
@@ -151,6 +160,15 @@ async function getTableFields(accessToken: string): Promise<Record<string, strin
             fieldMap['json_data'] = fieldNameZh; // 使用原始字段名（中文）
             fieldTypes['json_data'] = fieldType;
             console.log('[飞书同步] ✅ 找到JSON数据字段:', fieldNameZh, '类型:', fieldType);
+          }
+        }
+        // 更新时间字段匹配
+        else if (fieldName.includes('更新时间') || fieldName.includes('update') || fieldName.includes('time') ||
+                 fieldNameZh.includes('更新时间') || fieldNameZh.includes('更新')) {
+          if (!fieldMap['update_time']) {
+            fieldMap['update_time'] = fieldNameZh; // 使用原始字段名（中文）
+            fieldTypes['update_time'] = fieldType;
+            console.log('[飞书同步] ✅ 找到更新时间字段:', fieldNameZh, '类型:', fieldType);
           }
         }
       });
@@ -205,6 +223,17 @@ async function getAllRecords(accessToken: string): Promise<any[]> {
   }
 }
 
+// 生成格式化的时间字符串，格式：20260105-1212
+function getFormattedUpdateTime(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hour = String(now.getHours()).padStart(2, '0');
+  const minute = String(now.getMinutes()).padStart(2, '0');
+  return `${year}${month}${day}-${hour}${minute}`;
+}
+
 // 更新记录
 async function updateRecord(
   accessToken: string,
@@ -222,6 +251,11 @@ async function updateRecord(
   // 设置标题（文本类型）
   if (fieldMap['title']) {
     fields[fieldMap['title']] = note.title;
+  }
+
+  // 设置简短标题
+  if (fieldMap['shorttitle'] && note.shorttitle) {
+    fields[fieldMap['shorttitle']] = note.shorttitle;
   }
 
   // 设置正文（多行文本类型）
@@ -252,6 +286,12 @@ async function updateRecord(
       // 如果不是数字类型，尝试作为文本
       fields[fieldMap['order']] = String(order);
     }
+  }
+
+  // 设置更新时间（格式：20260105-1212）
+  if (fieldMap['update_time']) {
+    fields[fieldMap['update_time']] = getFormattedUpdateTime();
+    console.log(`[飞书同步] ✅ 设置更新时间: ${getFormattedUpdateTime()}`);
   }
 
   const updateResponse = await fetch(
@@ -300,6 +340,11 @@ async function createRecord(
     fields[fieldMap['title']] = note.title;
   }
 
+  // 设置简短标题
+  if (fieldMap['shorttitle'] && note.shorttitle) {
+    fields[fieldMap['shorttitle']] = note.shorttitle;
+  }
+
   // 设置正文（多行文本类型）
   if (fieldMap['content']) {
     fields[fieldMap['content']] = note.content;
@@ -328,6 +373,12 @@ async function createRecord(
       // 如果不是数字类型，尝试作为文本
       fields[fieldMap['order']] = String(order);
     }
+  }
+
+  // 设置更新时间（格式：20260105-1212）
+  if (fieldMap['update_time']) {
+    fields[fieldMap['update_time']] = getFormattedUpdateTime();
+    console.log(`[飞书同步] ✅ 设置更新时间: ${getFormattedUpdateTime()}`);
   }
 
   const createResponse = await fetch(
@@ -484,6 +535,7 @@ export async function syncSingleNoteToFeishu(
 export async function testSyncToFeishu(): Promise<void> {
   const testNote: XiaohongshuNote = {
     title: '救命！测出净春型，显白绝绝子！🌸',
+    shorttitle: '净春型显白绝绝子！',
     content: `总觉得自己穿衣服显土？颜色选不对，气质全无！
 
 原来我是净春型！测试数据超惊喜：温度80，自带暖阳感，明度70，色度85，清晰度90，对比度80，简直是妈生皮的天选之女，元气满满！
@@ -555,6 +607,10 @@ export async function syncProfileToFeishu(
       if (fieldMap['title']) {
         fields[fieldMap['title']] = note.title;
       }
+      // 设置简短标题
+      if (fieldMap['shorttitle'] && note.shorttitle) {
+        fields[fieldMap['shorttitle']] = note.shorttitle;
+      }
       // 设置正文
       if (fieldMap['content']) {
         fields[fieldMap['content']] = note.content;
@@ -563,6 +619,12 @@ export async function syncProfileToFeishu(
       if (fieldMap['tags']) {
         fields[fieldMap['tags']] = note.tags.join('\n');
       }
+    }
+
+    // 设置更新时间（格式：20260105-1212）
+    if (fieldMap['update_time']) {
+      fields[fieldMap['update_time']] = getFormattedUpdateTime();
+      console.log(`[飞书同步Profile] ✅ 设置更新时间: ${getFormattedUpdateTime()}`);
     }
 
     // 如果存在对应顺序的记录，则更新；否则创建新记录
@@ -676,8 +738,15 @@ export async function syncAllProfilesToFeishu(
         // 如果有笔记数据，同步笔记字段
         if (note) {
           if (fieldMap['title']) fields[fieldMap['title']] = note.title;
+          if (fieldMap['shorttitle'] && note.shorttitle) fields[fieldMap['shorttitle']] = note.shorttitle;
           if (fieldMap['content']) fields[fieldMap['content']] = note.content;
           if (fieldMap['tags']) fields[fieldMap['tags']] = note.tags.join('\n');
+        }
+
+        // 设置更新时间（格式：20260105-1212）
+        if (fieldMap['update_time']) {
+          fields[fieldMap['update_time']] = getFormattedUpdateTime();
+          console.log(`[飞书同步Profile] ✅ 设置更新时间: ${getFormattedUpdateTime()}`);
         }
 
         // 如果存在对应顺序的记录，则更新；否则创建新记录
@@ -825,6 +894,10 @@ export async function syncAllProfilesToFeishuWithProgress(
             fields[fieldMap['title']] = note.title;
             console.log(`[飞书同步Profile] 标题: ${note.title.substring(0, 30)}...`);
           }
+          if (fieldMap['shorttitle'] && note.shorttitle) {
+            fields[fieldMap['shorttitle']] = note.shorttitle;
+            console.log(`[飞书同步Profile] 简短标题: ${note.shorttitle}`);
+          }
           if (fieldMap['content']) {
             fields[fieldMap['content']] = note.content;
             console.log(`[飞书同步Profile] 正文长度: ${note.content.length} 字符`);
@@ -835,6 +908,12 @@ export async function syncAllProfilesToFeishuWithProgress(
           }
         } else {
           console.log(`[飞书同步Profile] ⚠️ ${profile.subtype} 没有笔记数据，只同步JSON`);
+        }
+
+        // 设置更新时间（格式：20260105-1212）
+        if (fieldMap['update_time']) {
+          fields[fieldMap['update_time']] = getFormattedUpdateTime();
+          console.log(`[飞书同步Profile] ✅ 设置更新时间: ${getFormattedUpdateTime()}`);
         }
 
         console.log(`[飞书同步Profile] 处理 ${profile.subtype} (第${order}行, record_id: ${existingRecords[order - 1]?.record_id || 'new'})`);

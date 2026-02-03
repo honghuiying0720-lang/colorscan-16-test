@@ -51,6 +51,7 @@ export const ALL_SUBTYPES = [
 
 export interface XiaohongshuNote {
   title: string;
+  shorttitle?: string;
   content: string;
   tags: string[];
 }
